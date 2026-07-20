@@ -54,12 +54,20 @@ export const DOCS_DATA: Record<string, DocItem> = {
 
 Optivor is an **open-source image infrastructure framework**.
 
+<Callout type="tip" title="Self-Hosted Open Source">
+Optivor runs entirely on your infrastructure with zero per-transform or per-image SaaS billing. Transform unlimited images for the cost of standard compute.
+</Callout>
+
 ## What Optivor Is
 
 - **Runtime Engine**: Performs high-performance image transformations (resize, format conversion to WebP/AVIF, quality optimization) using \`libvips\`.
 - **Bring-Your-Own-Storage (BYOS)**: Integrates directly with object storage you already own (AWS S3, MinIO, Cloudflare R2, Backblaze B2, Google Cloud Storage).
 - **Extensible Framework**: Offers out-of-process driver conventions and deployment adapters.
 - **Production-Grade Infrastructure**: Includes built-in rate limiting, LRU filesystem caching, OpenTelemetry tracing, and Prometheus metrics.
+
+<Callout type="note" title="Architectural Boundary">
+Optivor runs as an origin microservice behind your CDN (Cloudflare, Fastly, AWS CloudFront). It transforms assets on demand and streams responses with cache headers.
+</Callout>
 
 ## What Optivor Is NOT
 
@@ -81,6 +89,10 @@ Engineering teams building scalable web applications who want full control over 
     content: `# Quick Start Guide
 
 Get up and running with Optivor in under 5 minutes using Docker.
+
+<Callout type="tip" title="Docker First Deployment">
+Optivor containers ship with pre-compiled libvips native bindings ready for instant deployment.
+</Callout>
 
 ## Step 1: Clone and Prepare Config
 
@@ -114,15 +126,13 @@ docker run -d \\
   optivor:latest
 \`\`\`
 
-## Step 4: Request an Image Transformation
+## Step 4: Try the Interactive Request Builder
 
-Transform an image on the fly:
+Use the interactive request playground below to experiment with image parameters:
 
-\`\`\`bash
-curl -i "http://localhost:8080/image/sample.jpg?w=400&h=300&fit=cover&format=webp"
-\`\`\`
+<InteractiveCurl />
 
-Response will include transformed WebP binary payload and \`X-Optivor-Cache: MISS\` header.
+Response will include transformed WebP/AVIF binary payload and \`X-Optivor-Cache: MISS\` or \`HIT\` header.
 `
   },
 
@@ -134,6 +144,12 @@ Response will include transformed WebP binary payload and \`X-Optivor-Cache: MIS
     content: `# Configuration Reference
 
 Optivor uses Viper for configuration parsing from \`optivor.yaml\` and environment variables.
+
+<Callout type="note" title="Interactive YAML Builder">
+Use the interactive builder below to customize your optivor.yaml configuration for S3, Cloudflare R2, or Backblaze B2:
+</Callout>
+
+<ConfigGenerator />
 
 ## Full \`optivor.yaml\` Schema
 
@@ -172,17 +188,6 @@ telemetry:
   otlp_endpoint: ""           # OTLP/gRPC collector target URL
   service_name: "optivor"     # Service identifier in traces
   sampling_ratio: 1.0         # Trace sampling probability (0.0 to 1.0)
-
-auth:
-  signed_urls:
-    enabled: false            # Require HMAC signatures on request URLs
-    secret: ""                # HMAC signing secret key
-    max_age: 3600             # Default URL expiration age in seconds
-
-image:
-  contain_background_color: "#ffffff"  # Background color for fit=contain
-  max_pixels: 25000000                 # Decompression-bomb pixel threshold (~5000x5000)
-  max_decode_mb: 64                    # libvips startup memory ceiling
 \`\`\`
 
 ## Environment Overrides
@@ -203,6 +208,10 @@ Any configuration field can be overridden using \`OPTIVOR_\` environment variabl
     content: `# CLI Reference
 
 The \`optivor\` CLI provides commands for scaffolding, deployment, diagnostics, and storage driver management.
+
+<Callout type="tip" title="Diagnostics & Health">
+Run \`optivor doctor\` to instantly verify your libvips installation, S3 credentials, and network connectivity.
+</Callout>
 
 ## Root Command
 
@@ -236,22 +245,6 @@ Performs health and diagnostic checks on system dependencies, configuration, S3 
 optivor doctor [--config optivor.yaml]
 \`\`\`
 
-### \`optivor logs\`
-
-Tails Optivor service logs via systemd journalctl integration.
-
-\`\`\`bash
-optivor logs [--lines 100] [--follow]
-\`\`\`
-
-### \`optivor metrics\`
-
-Scrapes and prints runtime metrics from the \`/metrics\` endpoint.
-
-\`\`\`bash
-optivor metrics [--watch]
-\`\`\`
-
 ### \`optivor driver\`
 
 Manages external storage provider driver binaries.
@@ -273,6 +266,12 @@ optivor driver remove <name>
     content: `# Storage Driver Development Guide
 
 Optivor enforces a provider-agnostic core architecture (ADR-0002, ADR-0010). Storage drivers for cloud providers live outside the core repository as standalone binaries following the \`optivor-driver-<name>\` naming convention.
+
+<Callout type="important" title="Handshake Protocol v1">
+All storage driver executables MUST support the \`--optivor-handshake\` flag and return a valid JSON specification to stdout with exit code 0.
+</Callout>
+
+<DriverPlayground />
 
 ## Driver Specification
 
@@ -304,15 +303,6 @@ optivor driver install /path/to/optivor-driver-r2
 \`\`\`
 
 The CLI executes \`--optivor-handshake\`, validates the JSON response, and registers the driver in \`~/.config/optivor/drivers.json\`.
-
-## Developer Guide Series
-
-For a complete step-by-step guide to developing, testing, and contributing a custom provider driver:
-
-1. [Architecture & Specification Overview](/docs/developer-driver-overview)
-2. [Step-by-Step Implementation Guide](/docs/developer-driver-guide)
-3. [Testing & Local Verification](/docs/developer-driver-testing)
-4. [Submission & Registry Contribution](/docs/developer-driver-submission)
 `
   },
 
@@ -325,9 +315,9 @@ For a complete step-by-step guide to developing, testing, and contributing a cus
 
 This document details the architectural specifications for building out-of-process storage drivers for Optivor.
 
-## 1. Architectural Overview
-
-Per **ADR-0010**, Optivor core maintains a provider-agnostic stance. The core runtime ships only with a universal S3-compatible driver. All provider-specific storage integrations (e.g., Cloudflare R2 native extensions, Backblaze B2, Google Cloud Storage, Azure Blob) are implemented as standalone external binaries following the \`optivor-driver-<name>\` naming convention.
+<Callout type="note" title="ADR-0010 Compliance">
+Optivor core ships only with a universal S3 driver. External providers (R2, B2, GCS) are decoupled as out-of-process binaries.
+</Callout>
 
 \`\`\`
 +-------------------------------------------------------------+
@@ -348,76 +338,6 @@ Per **ADR-0010**, Optivor core maintains a provider-agnostic stance. The core ru
 - **Language Agnostic**: Drivers can be written in Go, Rust, Python, Node.js, C++, or any executable compiled language.
 - **Isolation**: Crashes or resource spikes in third-party provider SDKs do not impair core Optivor runtime stability.
 - **Independent Release Lifecycle**: Providers update independently of Optivor core versions.
-
----
-
-## 2. Driver Contract & Handshake Protocol
-
-Every driver executable MUST support the \`--optivor-handshake\` CLI flag.
-
-### Handshake Invocation
-\`\`\`bash
-optivor-driver-custom --optivor-handshake
-\`\`\`
-
-### Handshake JSON Response Specification
-The binary MUST write a valid JSON object to standard output (\`stdout\`) with an exit code of \`0\`:
-
-\`\`\`json
-{
-  "name": "r2",
-  "version": "1.0.0",
-  "optivor_api": "v1",
-  "capabilities": ["read", "write", "stat", "delete", "presign"],
-  "author": "Optivor Community",
-  "homepage": "https://github.com/optivor/optivor-driver-r2"
-}
-\`\`\`
-
-#### Field Specifications:
-| Field | Type | Required | Description |
-|---|---|---|---|
-| \`name\` | String | Yes | Lowercase unique provider identifier (alphanumeric and hyphens only). |
-| \`version\` | String | Yes | Driver semantic version string (e.g., \`1.0.0\`). |
-| \`optivor_api\` | String | Yes | Supported Optivor API protocol contract version (currently \`v1\`). |
-| \`capabilities\` | Array[String] | Yes | List of supported operations: \`read\`, \`write\`, \`stat\`, \`delete\`, \`presign\`. |
-| \`author\` | String | No | Driver author or organization name. |
-| \`homepage\` | String | No | Repository URL or documentation link. |
-
----
-
-## 3. Storage Operation Protocol (\`v1\`)
-
-During execution, Optivor invokes the driver binary passing commands and parameters via command-line arguments or standard input JSON.
-
-### Execution Context & Environment Variables
-Optivor passes runtime configuration and credential secrets to the driver via environment variables:
-
-- \`OPTIVOR_DRIVER_PROVIDER\`: Name of the targeted provider driver.
-- \`OPTIVOR_STORAGE_ENDPOINT\`: Target storage service endpoint URL.
-- \`OPTIVOR_STORAGE_BUCKET\`: Target bucket name.
-- \`OPTIVOR_STORAGE_ACCESS_KEY\`: Storage access key / ID.
-- \`OPTIVOR_STORAGE_SECRET_KEY\`: Storage secret key.
-- \`OPTIVOR_STORAGE_REGION\`: Target storage region (if applicable).
-
-### Standard Execution Command Interface
-\`\`\`bash
-optivor-driver-<provider> <command> <key> [flags]
-\`\`\`
-
-#### Supported Commands:
-1. \`get <key>\`: Stream object payload to \`stdout\`.
-2. \`put <key>\`: Read object payload from \`stdin\` and write to storage.
-3. \`head <key>\`: Retrieve metadata (Content-Type, Content-Length, ETag) formatted as JSON to \`stdout\`.
-4. \`delete <key>\`: Remove object from storage.
-
----
-
-## 4. Exit Codes & Error Format
-
-- Exit code \`0\`: Operation successful.
-- Exit code \`1\`: Operational error (object not found, permission denied). Error message written to \`stderr\`.
-- Exit code \`2\`: Invalid command arguments or invalid driver configuration.
 `
   },
 
@@ -430,37 +350,24 @@ optivor-driver-<provider> <command> <key> [flags]
 
 This guide provides a practical, step-by-step walkthrough for building a custom storage driver for Optivor.
 
----
+<Callout type="warning" title="Security Requirement">
+Do not hardcode API keys or secret tokens in driver binaries. Always consume configuration keys passed via environment variables (OPTIVOR_STORAGE_ACCESS_KEY, OPTIVOR_STORAGE_SECRET_KEY).
+</Callout>
 
 ## Step 1: Project Setup & Repository Structure
 
 Create a dedicated repository named \`optivor-driver-<provider>\` (e.g., \`optivor-driver-b2\`, \`optivor-driver-gcs\`).
 
-### Recommended Project Layout (Go example)
 \`\`\`
 optivor-driver-b2/
-├── .github/
-│   └── workflows/
-│       └── release.yml
-├── cmd/
-│   └── optivor-driver-b2/
-│       └── main.go
-├── internal/
-│   └── b2/
-│       ├── client.go
-│       └── operations.go
+├── .github/workflows/release.yml
+├── cmd/optivor-driver-b2/main.go
+├── internal/b2/client.go
 ├── LICENSE
-├── README.md
-└── go.mod
+└── README.md
 \`\`\`
 
----
-
-## Step 2: Implement Handshake & CLI Command Parser
-
-Your driver executable must parse the \`--optivor-handshake\` argument as well as operation commands (\`get\`, \`put\`, \`head\`, \`delete\`).
-
-### Reference Go Implementation
+## Step 2: Reference Go Implementation
 
 \`\`\`go
 package main
@@ -490,99 +397,8 @@ func main() {
 		fmt.Println(string(output))
 		os.Exit(0)
 	}
-
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "Usage: optivor-driver-b2 <command> <key>")
-		os.Exit(2)
-	}
-
-	command := os.Args[1]
-	key := os.Args[2]
-
-	switch command {
-	case "get":
-		handleGet(key)
-	case "head":
-		handleHead(key)
-	default:
-		fmt.Fprintf(os.Stderr, "Unsupported command: %s\\n", command)
-		os.Exit(2)
-	}
-}
-
-func handleGet(key string) {
-	// Read credentials from environment variables
-	// endpoint := os.Getenv("OPTIVOR_STORAGE_ENDPOINT")
-	// accessKey := os.Getenv("OPTIVOR_STORAGE_ACCESS_KEY")
-	
-	// Implementation logic streaming object content to os.Stdout...
-}
-
-func handleHead(key string) {
-	// Output metadata JSON to os.Stdout
 }
 \`\`\`
-
----
-
-## Step 3: Reference Python Implementation
-
-Drivers can be authored in scripting languages like Python (packaged into a single executable using \`PyInstaller\` or \`Nuitka\`).
-
-\`\`\`python
-#!/usr/bin/env python3
-import sys
-import json
-import os
-
-HANDSHAKE_RESPONSE = {
-    "name": "gcs-custom",
-    "version": "0.1.0",
-    "optivor_api": "v1",
-    "capabilities": ["read", "write", "stat", "delete"]
-}
-
-def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "--optivor-handshake":
-        print(json.dumps(HANDSHAKE_RESPONSE, indent=2))
-        sys.exit(0)
-
-    if len(sys.argv) < 3:
-        sys.stderr.write("Usage: optivor-driver-gcs <command> <key>\\n")
-        sys.exit(2)
-
-    command = sys.argv[1]
-    key = sys.argv[2]
-
-    if command == "get":
-        # Stream content to stdout
-        sys.stdout.buffer.write(b"sample image content")
-        sys.exit(0)
-    elif command == "head":
-        meta = {"content_type": "image/jpeg", "content_length": 1024}
-        print(json.dumps(meta))
-        sys.exit(0)
-    else:
-        sys.stderr.write(f"Unknown command {command}\\n")
-        sys.exit(2)
-
-if __name__ == "__main__":
-    main()
-\`\`\`
-
----
-
-## Step 4: Handling Environment Configuration & Credentials
-
-Do not hardcode API keys or bucket names in driver binaries. Always consume standard configuration keys passed down from the Optivor host runtime:
-
-- \`OPTIVOR_STORAGE_BUCKET\`
-- \`OPTIVOR_STORAGE_ACCESS_KEY\`
-- \`OPTIVOR_STORAGE_SECRET_KEY\`
-- \`OPTIVOR_STORAGE_ENDPOINT\`
-- \`OPTIVOR_STORAGE_REGION\`
-
-Ensure sensible fallbacks or return descriptive error messages on \`stderr\` with exit code \`1\` when required credentials are absent.
 `
   },
 
@@ -595,51 +411,18 @@ Ensure sensible fallbacks or return descriptive error messages on \`stderr\` wit
 
 This guide explains how to test and validate your custom Optivor storage driver before submitting it to the community registry.
 
----
+<Callout type="tip" title="Interactive Verification">
+Test your driver handshake logic right here in the documentation:
+</Callout>
 
-## 1. Handshake Verification Test
+<DriverPlayground />
+
+## Handshake Verification Test
 
 Verify that your binary returns valid JSON and exits with code \`0\` when called with \`--optivor-handshake\`.
 
 \`\`\`bash
 ./optivor-driver-b2 --optivor-handshake
-\`\`\`
-
-### Expected Output
-\`\`\`json
-{
-  "name": "b2",
-  "version": "0.1.0",
-  "optivor_api": "v1",
-  "capabilities": ["read", "write", "stat", "delete"]
-}
-\`\`\`
-
-### Verification Script
-\`\`\`bash
-# Verify exit code 0
-./optivor-driver-b2 --optivor-handshake > /dev/null
-if [ $? -ne 0 ]; then
-  echo "FAIL: Handshake exit code must be 0"
-  exit 1
-fi
-
-# Verify JSON schema validation
-./optivor-driver-b2 --optivor-handshake | jq .optivor_api
-\`\`\`
-
----
-
-## 2. Local Registration Test
-
-Use the Optivor CLI to register your binary locally and confirm driver discovery.
-
-\`\`\`bash
-# 1. Install driver binary
-optivor driver install ./optivor-driver-b2
-
-# 2. List installed drivers
-optivor driver list
 \`\`\`
 `
   },
@@ -653,51 +436,16 @@ optivor driver list
 
 This document outlines the step-by-step process for submitting your completed custom storage driver to the official Optivor Provider Registry.
 
----
+<Callout type="tip" title="Community Registry">
+Official drivers are listed in the Optivor CLI registry for easy installation via \`optivor driver install\`.
+</Callout>
 
-## Step 1: Submission Requirements & Guidelines
+## Submission Requirements
 
-Before submitting your driver for inclusion, ensure it fulfills the following guidelines:
-
-1. **Repository Naming**: Public GitHub repository named \`optivor-driver-<provider>\` (e.g., \`optivor-driver-r2\`).
+1. **Repository Naming**: Public GitHub repository named \`optivor-driver-<provider>\`.
 2. **License**: Open-source license (MIT, Apache 2.0, or BSD-3-Clause).
-3. **Cross-Platform Release**: Pre-compiled binary releases for \`linux/amd64\`, \`linux/arm64\`, \`darwin/amd64\`, \`darwin/arm64\`, and \`windows/amd64\` uploaded to GitHub Releases.
-4. **Documentation**: Clear \`README.md\` explaining provider prerequisites, configuration variables, and version support.
-5. **Handshake Compliant**: Implements \`--optivor-handshake\` returning protocol version \`v1\`.
-
----
-
-## Step 2: Continuous Integration & Release Packaging
-
-Configure GitHub Actions in your driver repository to build cross-compiled binaries on every tagged release.
-
-### Sample \`.github/workflows/release.yml\`
-\`\`\`yaml
-name: Release Driver Binaries
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-      - name: Build cross-platform binaries
-        run: |
-          GOOS=linux GOARCH=amd64 go build -o bin/optivor-driver-b2-linux-amd64 ./cmd/optivor-driver-b2
-          GOOS=linux GOARCH=arm64 go build -o bin/optivor-driver-b2-linux-arm64 ./cmd/optivor-driver-b2
-          GOOS=darwin GOARCH=arm64 go build -o bin/optivor-driver-b2-darwin-arm64 ./cmd/optivor-driver-b2
-      - name: Upload Binaries to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: bin/*
-\`\`\`
+3. **Cross-Platform Release**: Pre-compiled binary releases uploaded to GitHub Releases.
+4. **Handshake Compliant**: Implements \`--optivor-handshake\` returning protocol version \`v1\`.
 `
   },
 
@@ -718,11 +466,7 @@ Optivor supports JPEG, PNG, WebP, AVIF, GIF, TIFF, and SVG input formats. Transf
 
 ### How does caching work?
 
-Optivor includes an in-memory & disk-backed LRU filesystem cache (\`internal/cache/fs\`). Transformed images are stored locally to serve repeat requests instantly (\`X-Optivor-Cache: HIT\`). Disk usage is managed automatically by \`max_size_mb\`.
-
-### Does Optivor support Cloudflare R2 / Backblaze B2 / Google Cloud Storage?
-
-Yes! Any S3-compatible object storage works out of the box with the default S3 driver. External custom drivers can also be managed using \`optivor driver install\`.
+Optivor includes an in-memory & disk-backed LRU filesystem cache. Transformed images are stored locally to serve repeat requests instantly (\`X-Optivor-Cache: HIT\`).
 `
   }
 };
